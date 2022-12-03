@@ -1,0 +1,199 @@
+# This is the code of revised STR() function
+# Please run in R 3.6.3 or down
+# Suo Liu, 11/23/2022, liusuo99@qq.com
+newSTR_tax <-  function (comm, grp, mean.method = c("am", "gm"),fit.method = c("OLS","NLR"), 
+          STR.model = c("power", "log")) 
+{
+  sampc = match.name(rn.list = list(comm = comm, grp = grp))
+  comm = sampc$comm
+  grp = sampc$grp
+  if (!is.numeric(grp[, 1])) {
+    stop("time point values must be numeric!")
+  }
+  tpoints = sort(unique(grp[, 1]), decreasing = FALSE)
+  wnum = length(tpoints)
+  check.depth = sapply(1:wnum, function(i) {
+    sampi = rownames(grp)[grp[, 1] == tpoints[i]]
+    sum(comm[which(rownames(comm) %in% sampi), ])
+  })
+  if (length(unique(check.depth)) > 1) {
+    warning("Different time points did not show the same sequencing depth.")
+  }
+  rich.wind = lapply(1:wnum, function(i) {
+    message("Now window i=", i, " in ", wnum, ". ", date())
+    t(
+      sapply(
+        1:(wnum - i + 1), function(j) {
+          tpij = tpoints[j:(j + i - 1)]
+          sampij = rownames(grp)[which(grp[, 1] %in% tpij)]
+          comij = comm[which(rownames(comm) %in% sampij), 
+                       , drop = FALSE]
+          richij = sum(colSums(comij) > 0)
+          tscaleij = tpij[length(tpij)] - tpij[1] + 1
+          c(tscaleij, richij)
+        }
+      )
+    )
+  })
+  richw = Reduce(rbind, rich.wind)
+  colnames(richw) = c("time.scale", "richness")
+  rownames(richw) = 1:nrow(richw)
+  ts.lev = sort(unique(richw[, 1]), decreasing = FALSE)
+  output = list()
+  k = 1
+  message("Now doing regression...", date())
+  if ("gm" %in% mean.method) {
+    gm <- function(v) {
+      prod(v)^(1/length(v))
+    }
+    richw = richw[richw[,2]!=0,]
+    richs = sapply(1:length(ts.lev), function(i) {
+      gm(richw[which(richw[, 1] == ts.lev[i]), 2])
+    })
+    richs.out = data.frame(richness.gm = richs)
+    lgs = log(richs)
+    lgt = log(ts.lev)
+    if ("power" %in% STR.model) {
+      lm.power = lm(lgs ~ lgt)
+      lm.psum = summary(lm.power)
+      c1 = exp(lm.power$coefficients[[1]])
+      w1 = lm.power$coefficients[[2]]
+      output[[k]] = data.frame(fit.method = "OLS", STR.model = "Power.model", 
+                               mean.method = "Geometric", c = c1, w = w1, w.se = lm.psum$coefficients[2, 
+                                                                                                      2], R2 = lm.psum$r.squared, R2.adj = lm.psum$adj.r.squared, 
+                               w.p.value = lm.psum$coefficients[2, 4])
+      k = k + 1
+    }
+    if ("log" %in% STR.model) {
+      lm.log = lm(richs ~ lgt)
+      lm.lsum = summary(lm.log)
+      c2 = lm.log$coefficients[[1]]
+      w2 = lm.log$coefficients[[2]]
+      output[[k]] = data.frame(fit.method = "OLS", STR.model = "Log.model", 
+                               mean.method = "Geometric", c = c2, w = w2, w.se = lm.lsum$coefficients[2, 
+                                                                                                      2], R2 = lm.lsum$r.squared, R2.adj = lm.lsum$adj.r.squared, 
+                               w.p.value = lm.lsum$coefficients[2, 4])
+      k = k + 1
+    }
+    if ("NLR" %in% fit.method) {
+      if ("power" %in% STR.model) {
+        nl.power = nls(richs ~ c * ts.lev^w, start = list(c = c1, 
+                                                          w = w1), trace = FALSE)
+        nl.psum = summary(nl.power)
+        SSR = sum(nl.psum$residuals^2)
+        SST = sum((richs - mean(richs))^2)
+        R2 = 1 - (SSR/SST)
+        sampn = length(ts.lev)
+        R2.adj = 1 - ((1 - R2) * ((sampn - 1)/(sampn - 
+                                                 1 - 1)))
+        output[[k]] = data.frame(fit.method = "NLR", 
+                                 STR.model = "Power.model", mean.method = "Geometric", 
+                                 c = nl.psum$coefficients[1, 1], w = nl.psum$coefficients[2, 
+                                                                                          1], w.se = nl.psum$coefficients[2, 2], R2 = R2, 
+                                 R2.adj = R2.adj, w.p.value = nl.psum$coefficients[2, 
+                                                                                   4])
+        k = k + 1
+      }
+      if ("log" %in% STR.model) {
+        nl.log = nls(richs ~ c + w * log(ts.lev), start = list(c = c2, 
+                                                               w = w2), trace = FALSE)
+        nl.lsum = summary(nl.log)
+        SSR = sum(nl.lsum$residuals^2)
+        SST = sum((richs - mean(richs))^2)
+        R2 = 1 - (SSR/SST)
+        sampn = length(ts.lev)
+        R2.adj = 1 - ((1 - R2) * ((sampn - 1)/(sampn - 
+                                                 1 - 1)))
+        output[[k]] = data.frame(fit.method = "NLR", 
+                                 STR.model = "Log.model", mean.method = "Geometric", 
+                                 c = nl.lsum$coefficients[1, 1], w = nl.lsum$coefficients[2, 
+                                                                                          1], w.se = nl.lsum$coefficients[2, 2], R2 = R2, 
+                                 R2.adj = R2.adj, w.p.value = nl.lsum$coefficients[2, 
+                                                                                   4])
+        k = k + 1
+      }
+    }
+  }
+  else {
+    richs.out = NULL
+  }
+  if ("am" %in% mean.method) {
+    richs = sapply(1:length(ts.lev), function(i) {
+      mean(richw[which(richw[, 1] == ts.lev[i]), 2])
+    })
+    
+    if (is.null(richs.out)) {
+      richs.out = data.frame(richness.am = richs)
+    }
+    else {
+      richs.out = data.frame(richs.out, richness.am = richs)
+    }
+    lgs = log(richs)
+    lgt = log(ts.lev)
+    if ("power" %in% STR.model) {
+      lm.power = lm(lgs ~ lgt)
+      lm.psum = summary(lm.power)
+      c1 = exp(lm.power$coefficients[[1]])
+      w1 = lm.power$coefficients[[2]]
+      output[[k]] = data.frame(fit.method = "OLS", STR.model = "Power.model", 
+                               mean.method = "Arithmetic", c = c1, w = w1, 
+                               w.se = lm.psum$coefficients[2, 2], R2 = lm.psum$r.squared, 
+                               R2.adj = lm.psum$adj.r.squared, w.p.value = lm.psum$coefficients[2, 
+                                                                                                4])
+      k = k + 1
+    }
+    if ("log" %in% STR.model) {
+      lm.log = lm(richs ~ lgt)
+      lm.lsum = summary(lm.log)
+      c2 = lm.log$coefficients[[1]]
+      w2 = lm.log$coefficients[[2]]
+      output[[k]] = data.frame(fit.method = "OLS", STR.model = "Log.model", 
+                               mean.method = "Arithmetic", c = c2, w = w2, 
+                               w.se = lm.lsum$coefficients[2, 2], R2 = lm.lsum$r.squared, 
+                               R2.adj = lm.lsum$adj.r.squared, w.p.value = lm.lsum$coefficients[2, 
+                                                                                                4])
+      k = k + 1
+    }
+    if ("NLR" %in% fit.method) {
+      if ("power" %in% STR.model) {
+        nl.power = nls(richs ~ c * ts.lev^w, start = list(c = c1, 
+                                                          w = w1), trace = FALSE)
+        nl.psum = summary(nl.power)
+        SSR = sum(nl.psum$residuals^2)
+        SST = sum((richs - mean(richs))^2)
+        R2 = 1 - (SSR/SST)
+        sampn = length(ts.lev)
+        R2.adj = 1 - ((1 - R2) * ((sampn - 1)/(sampn - 
+                                                 1 - 1)))
+        output[[k]] = data.frame(fit.method = "NLR", 
+                                 STR.model = "Power.model", mean.method = "Arithmetic", 
+                                 c = nl.psum$coefficients[1, 1], w = nl.psum$coefficients[2, 
+                                                                                          1], w.se = nl.psum$coefficients[2, 2], R2 = R2, 
+                                 R2.adj = R2.adj, w.p.value = nl.psum$coefficients[2, 
+                                                                                   4])
+        k = k + 1
+      }
+      if ("log" %in% STR.model) {
+        nl.log = nls(richs ~ c + w * log(ts.lev), start = list(c = c2, 
+                                                               w = w2), trace = FALSE)
+        nl.lsum = summary(nl.log)
+        SSR = sum(nl.lsum$residuals^2)
+        SST = sum((richs - mean(richs))^2)
+        R2 = 1 - (SSR/SST)
+        sampn = length(ts.lev)
+        R2.adj = 1 - ((1 - R2) * ((sampn - 1)/(sampn - 
+                                                 1 - 1)))
+        output[[k]] = data.frame(fit.method = "NLR", 
+                                 STR.model = "Log.model", mean.method = "Arithmetic", 
+                                 c = nl.lsum$coefficients[1, 1], w = nl.lsum$coefficients[2, 
+                                                                                          1], w.se = nl.lsum$coefficients[2, 2], R2 = R2, 
+                                 R2.adj = R2.adj, w.p.value = nl.lsum$coefficients[2, 
+                                                                                   4])
+        k = k + 1
+      }
+    }
+  }
+  output = Reduce(rbind, output)
+  data.out = data.frame(time.scale = ts.lev, richs.out)
+  list(STR = output, data = data.out, details = richw)
+}
