@@ -1,6 +1,6 @@
 # This is the code for calculating p value of STR's slope between treatments
 # Suo Liu, 12/03/2022, liusuo99@qq.com
-# references: Li et al., Functional Ecology, 2017,doi: 10.1111/1365-2435.12975
+# references: Li et al., Functional Ecology, 2017,Doi: 10.1111/1365-2435.12975
 # https://mp.weixin.qq.com/s/O9rlIXUpDDxOr7Cy3SzPfQ
 p_SMA_STR <- function(time_treat, time_am) {
   library(lmerTest)
