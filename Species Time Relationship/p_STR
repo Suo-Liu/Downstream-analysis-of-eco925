@@ -1,0 +1,188 @@
+# This is the code for calculating p value of STR regression and between treatments
+# Please run in R 3.6.3 or down
+# Suo Liu, 11/19/2022, liusuo99@qq.com
+p_STR <- function(time_treat, time_am, rand = 999) {
+  #  p_bootstrap_STR
+  # 计算回归的显著性
+  out.sum <- list()
+  out.wboot <- list()
+  out.pboot <- vector()
+  time_merge <- rbind(cbind(time_treat, treat = "warming"), cbind(time_am, treat = "control"))
+  trt.lev <- unique(time_merge[, "treat"])
+  trt.lev <- as.character(trt.lev)
+  library(ieggr)
+  library(lme4)
+  library(lmerTest)
+  library(MuMIn)
+  library(permute)
+  
+  for (i in 1:length(trt.lev)) {
+    {      if (i == 1) {
+      time <- time_treat
+    } else {
+      time <- time_am
+    }    }
+    fm <- lmer(log.richness ~ log.time + (1 | block), data = time)
+    w <- summary(fm)$coefficients[[2]]
+    w.boot <- sapply(1:rand, function(v) {
+      idbt <- unique(sample(1:nrow(time), nrow(time),
+        replace = TRUE
+      ))
+      k <- 1
+      while (length(idbt) < 3 & k < 1000) {
+        idbt <- unique(sample(1:nrow(time), nrow(time),
+          replace = TRUE
+        ))
+        k <- k + 1
+      }
+      {
+        if (length(idbt) < 3) {
+          out <- NA
+        } else {
+          time.b <- time[idbt, ]
+          logs.b <- time.b[, 3]
+          logt.b <- time.b[, 2]
+          block.b <- time.b[, 1]
+          fm.b <- lmer(logs.b ~ logt.b + (1 | block.b))
+          out <- summary(fm.b)$coefficients[[2]]
+        }
+      }
+      out
+    })
+    outwq <- quantile(c(w.boot, w))
+    names(outwq) <- paste0("w.q", sub("%", "", names(outwq)))
+    # 暂定以斜率小于0的频率为犯错概率估计
+    p.boot <- 1 - (sum(c(w.boot, w) > 0) / (rand + 1))
+    # p.t.test=t.test(w.boot,mu=w,alternative="two.sided")
+    # p.boot=p.t.test$p.value
+    
+    out.sum[[i]] <- w
+    names(out.sum)[i] <- trt.lev[i]
+    out.wboot[[i]] <- w.boot
+    names(out.wboot)[i] <- trt.lev[i]
+    out.pboot[i] <- p.boot
+    names(out.pboot)[i] <- trt.lev[i]
+  }
+
+  # 组间比较的bootstrap方法
+  wi <- out.sum[[1]]
+  wj <- out.sum[[2]]
+  delta.w <- wi - wj
+  rel.dif <- (delta.w) / max(wi, wj)
+  wi.bt <- out.wboot[[1]]
+  wj.bt <- out.wboot[[2]]
+  # 因为不是paired的，所有随机抽取样品进行bootstrap计算时，每次的随机序列改变对结果影响应该可以忽略
+  cohen.d <- cohend(wi.bt, wj.bt, paired = FALSE)
+  mi <- matrix(wi.bt, nr = length(wi.bt), nc = length(wj.bt))
+  mj <- matrix(wj.bt,
+    nr = length(wi.bt), nc = length(wj.bt),
+    byrow = TRUE
+  )
+  
+  # pairtreat.t.test = t.test(wi.bt-wi,wj.bt-wj)
+  # pairtreat.p.boot = pairtreat.t.test$p.value
+  pairtreat.p.boot <- (sum(mi > mj) + (sum(mi == mj) * 0.5)) / (length(wi.bt) *
+    length(wj.bt))
+  if (pairtreat.p.boot > 0.5) {
+    pairtreat.p.boot <- 1 - pairtreat.p.boot
+  }
+
+  # p_permtest_STR
+  # 计算回归的显著性
+  out.pperm <- vector()
+  # out.p.yiqian = list()
+  # perm.slope = c(rep(NA,1000))
+  for (i in 1:length(trt.lev)) {
+    {      if (i == 1) {
+      time <- time_treat
+      # w = wi
+    } else {
+      time <- time_am
+      # w = wj
+    }    }
+    fm <- lmer(log.richness ~ log.time + (1 | block), data = time)
+    R2ad.obs <- r.squaredGLMM(fm)[, 2]
+    perm <- permute::shuffleSet(nrow(time), nset = rand)
+    R2ad.rand <- sapply(1:nrow(perm), function(v) {
+      time.r <- time[perm[v, ], ]
+      logt.r <- time.r[, 2]
+      block.r <- time.r[, 1]
+      logs <- time[, 3]
+      t.lms.r <- lmer(logs ~ logt.r + (1 | block.r))
+      r.squaredGLMM(t.lms.r)[, 2]
+    })
+    # for(j in 1:1000){
+    #   richness.treat=sample(time$log.richness)
+    #   cyear = time$log.time
+    #   block = time$block
+    #   yiqian.perm = lmer(richness.treat ~ cyear + (1|block))
+    #   perm.slope[j]=summary(yiqian.perm)$coefficients[2,1]
+    # }
+    # out.p.yiqian[[i]] = perm.slope
+    # p.perm.test = t.test(perm.slope,mu=w,alternative="two.sided")
+    # p.perm = p.perm.test$p.value
+    p.perm <- (sum(R2ad.rand >= R2ad.obs) + 1) / (nrow(perm) + 1)
+    out.pperm[i] <- p.perm
+    names(out.pperm)[i] <- trt.lev[i]
+  }
+
+  # 组间比较的permutation test方法
+  i <- 1
+  j <- 2
+  treatij <- time_merge[, "treat", drop = F]
+  perm <- permute::shuffleSet(nrow(treatij), nset = rand)
+  delta.w.r <- sapply(1:nrow(perm), function(m) {
+    treatij.r <- treatij
+    rownames(treatij.r) <- rownames(treatij)[perm[m, ]]
+    sampi.r <- rownames(treatij.r)[treatij.r ==
+      trt.lev[i]]
+    speci.r <- time_merge[match(sampi.r, rownames(time_merge)), 3]
+    timei.r <- time_merge[match(sampi.r, rownames(time_merge)), 2]
+    blocki.r <- time_merge[match(sampi.r, rownames(time_merge)), 1]
+    fmi.r <- lmer(speci.r ~ timei.r + (1 | blocki.r))
+    wi.r <- summary(fmi.r)$coefficients[[2]]
+    sampj.r <- rownames(treatij.r)[treatij.r == trt.lev[j]]
+    specj.r <- time_merge[match(sampj.r, rownames(time_merge)), 3]
+    timej.r <- time_merge[match(sampj.r, rownames(time_merge)), 2]
+    blockj.r <- time_merge[match(sampj.r, rownames(time_merge)), 1]
+    fmj.r <- lmer(specj.r ~ timej.r + (1 | blockj.r))
+    wj.r <- summary(fmj.r)$coefficients[[2]]
+    wi.r - wj.r
+  })
+  {
+    if (delta.w < 0) {
+      pairtreat.p.perm <- (sum(delta.w.r <= delta.w) + 1) / (length(delta.w.r) + 1)
+    } else {
+      pairtreat.p.perm <- (sum(delta.w.r >= delta.w) + 1) / (length(delta.w.r) + 1)
+    }
+  }
+  
+  # pairtreat.p.perm.t.test=t.test(out.p.yiqian[[1]]-wi,out.p.yiqian[[2]]-wj)
+  # pairtreat.p.perm=pairtreat.p.perm.t.test$p.value
+  
+  a <- data.frame(
+    p.method = c("bootstrap", "permutation"), p.pair = c(pairtreat.p.boot, pairtreat.p.perm),
+    p.regression.treat = c(out.pboot[1], out.pperm[1]),
+    p.regression.am = c(out.pboot[2], out.pperm[2]), cohen.d = cohen.d,
+    relative.difference = c(rel.dif, NA)
+  )
+}
+
+# annotation --------------------------------------------------------------
+# boot strap方法。随机且可放回的按原样本量抽取时间点和其similarity，计算线性关系，
+# 得到斜率，如此这般得到若干个斜率后，可得出样本的斜率分布，类似move window。
+# 最后将得到的所有斜率与0比较，小于0的斜率所占比例充当p.boot，由于w计算出来为正，
+# 因此认为犯错误的概率是计算出来斜率小于0的比例
+
+# 组间比较的bootstrap方法：将组内计算的bootstrap的若干斜率进行pairwise的比较，以大
+# 或者小的频率作为组间比较的p.boot
+
+# time decay的关系由线性回归得到，用permutation验证单条直线线性关系是否显著的置换
+# 检验的方法是得到若干组打乱的时间点，计算出时间差值后，与未打乱的纵坐标进行线性回归，得到若干组p值，
+# 然后比较正常所得R2是否小于大多数随机得到的R2，这时得到的比例即为p.perm
+
+# 组间比较的permutation test方法
+# 生成多个乱的样品与处理的对应顺序，分别计算此分组下不同处理各自time decay的斜率，
+# 也可以得到两者之间的差值，若分组确实对差值有影响，则打乱顺序得到的差值分布的最大丰度
+# 应该在0附近，而真实值应该位于两端，因此若真实差值小于0，则取分组小于真实值的频率为
+# 犯错概率，反之大于0，取分组大于真实值的频率为犯错概率。
