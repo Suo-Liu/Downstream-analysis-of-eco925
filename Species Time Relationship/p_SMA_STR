@@ -1,0 +1,33 @@
+# This is the code for calculating p value of STR's slope between treatments
+# Suo Liu, 12/03/2022, liusuo99@qq.com
+# references: Li et al., Functional Ecology, 2017,doi: 10.1111/1365-2435.12975
+# https://mp.weixin.qq.com/s/O9rlIXUpDDxOr7Cy3SzPfQ
+p_SMA_STR <- function(time_treat, time_am) {
+  library(lmerTest)
+  library(smatr)
+  out.sum <- list()
+  time_merge <- rbind(cbind(time_treat, treat = "warming"), cbind(time_am, treat = "control"))
+  trt.lev <- unique(time_merge[, "treat"])
+  trt.lev <- as.character(trt.lev)
+  for (i in 1:length(trt.lev)) {
+    {      if (i == 1) {
+      time <- time_treat
+    } else {
+      time <- time_am
+    }    }
+    fm <- lmer(log.richness ~ log.time + (1 | block), data = time)
+    w <- summary(fm)$coefficients[[2]]
+    out.sum[[i]] <- w
+    names(out.sum)[i] <- trt.lev[i]
+  }
+  wi <- out.sum[[1]]
+  wj <- out.sum[[2]]
+  result_sma_treat <- sma(log.richness ~ log.time, data = time_treat, slope.test = wj)
+  p_sma_a <- result_sma_treat[["groupsummary"]][["Slope_test_p"]]
+  result_sma_am <- sma(log.richness ~ log.time, data = time_am, slope.test = wi)
+  p_sma_b <- result_sma_am[["groupsummary"]][["Slope_test_p"]]
+  a <- data.frame(
+    p.method = c("SMA", "SMA"), p.pair = c(p_sma_a, p_sma_b)
+  )
+  a
+}
