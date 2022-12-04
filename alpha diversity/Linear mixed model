@@ -1,0 +1,32 @@
+#### LMM for alpha diversity ####
+divindex.file <- "C:\\Users\\Administrator\\OneDrive\\桌面\\research\\work\\inner mongolia\\alpha diversity\\protist.alpha.div.csv"
+treat<-read.csv(treat.file,header = T,row.names = 1)
+treat = subset(treat, Layer == "L4")
+divindex<-read.csv(divindex.file,header = T,row.names = 1)
+divindex<-divindex[match(row.names(treat),row.names(divindex)),]
+# scale the alpha diversities
+divindex<-scale(divindex)
+library(lme4)
+library(car)
+divs1<-sapply(1:ncol(divindex),function(j){
+  message("Now j=",j," in ",ncol(divindex),". ",date())
+  if (length(unique(divindex[,j]))<3){
+    result<-rep(NA,38)
+  } else {
+    div<-data.frame(divtest=divindex[,j],treat)
+#    fm<-lmer(divtest~warm*precip*plant*layer+(1|block),data=div)
+    fm<-lmer(divtest~warm*precip*plant+(1|block),data=div)
+    presult<-car::Anova(fm,type=2)
+    coefs<-coef(summary(fm))[ , "Estimate"]#four coefs
+    names(coefs)<-paste0(names(coefs),".mean")
+    SEvalues<-coef(summary(fm))[ , "Std. Error"]#standard errors
+    names(SEvalues)<-paste0(names(SEvalues),".se")
+    tvalues<-coef(summary(fm))[ , "t value"]#t values
+    names(tvalues)<-paste0(names(tvalues),".t")
+    chisqP<-c(presult[,1],presult[,3])
+    names(chisqP)<-c(paste0(row.names(presult),".chisq"),paste0(row.names(presult),".P"))
+    result<-c(coefs,tvalues,SEvalues,chisqP)}
+})
+colnames(divs1)<-colnames(divindex)
+library(ieggr)
+save.file(divs1,prefix = prefix,"LMM")
