@@ -1,0 +1,35 @@
+# This is the code of alpha diversity on inner mongolia
+# Please run in R 3.6.3 or down
+# need "ieggr" package which owned by our group
+# Suo Liu, 11/25/2022, liusuo99@qq.com
+setwd("C:/Users/Administrator/OneDrive/桌面")
+com.file = "C:\\Users\\Administrator\\OneDrive\\桌面\\research\\work\\inner mongolia\\data use for analysis\\16S\\16S.zotutab_80837.txt"
+tree.file = "C:\\Users\\Administrator\\OneDrive\\桌面\\research\\work\\inner mongolia\\data use for analysis\\16S\\16S_rooted_tree.nwk"
+treat.file <- "C:\\Users\\Administrator\\OneDrive\\桌面\\research\\work\\inner mongolia\\data use for analysis\\treatment.csv"
+
+prefix = "protist"
+#### alpha diversity calculation ####
+library(ieggr)
+comm=t(read.table(com.file, header = TRUE, sep = "\t", row.names = 1,
+                  as.is = TRUE, stringsAsFactors = FALSE, comment.char = "",
+                  check.names = FALSE))
+comm=comm[,colSums(comm)>0]
+alpha.tax=alpha.g(comm,td.method = c("richness","shannon","simpson","invsimpson","pielou","chao1","ACE","renyi","hill"))
+# Faith's Phylogenetic Diversity
+{
+  tree=lazyopen(tree.file)
+  spc=match.name(cn.list=list(comm=comm),tree.list = list(tree=tree))
+  comm=spc$comm
+  tree=spc$tree
+  library(picante)
+  Faith.PD<-picante::pd(comm,tree,include.root = FALSE)
+}
+# match
+{
+  spc=match.name(rn.list=list(alpha.tax=alpha.tax,Faith.PD=Faith.PD))
+  alpha.tax=spc$alpha.tax
+  Faith.PD=spc$Faith.PD
+  alpha.tax=data.frame(alpha.tax)
+  alpha.tax$PD=Faith.PD$PD
+}
+save.file(alpha.tax,prefix = prefix,"alpha.div")
