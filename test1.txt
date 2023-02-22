@@ -1,0 +1,17 @@
+The Main Regulators of the Soil Microbiome
+Most of the living biomass on Earth is comprised of microorganisms [1]. Soil, in particular, harbours an enormous diversity and abundance of microbial life referred to, collectively, as the soil
+microbiome [2,3]. The soil microbiome is mainly comprised of soil bacteria and fungi, which reside
+in the bulk and/or in the rhizosphere soil. The diversity and abundance of soil bacteria and fungi
+are responsible for a vast number of vital ecosystem functions and services, such as primary production, carbon sequestration, and nutrient mineralization [4]. Ecologists and microbiologists
+have thus sought for a long time to understand the factors that regulate the structure, composition, and function of soil bacteria and fungi.
+It has been suggested that soil abiotic properties, such as pH and organic matter content,
+are the principal regulators of the structure and composition of soil bacteria and fungi [2,5].
+Moreover, studies have consistently shown that the community composition of soil bacteria
+and fungi also depends on several biotic factors [6,7]. Broadly, there are two biotic factors
+that regulate soil bacterial and fungal communities, particularly at the finer spatial scales:
+litter input and rhizodeposition by plants, and top-down regulation by the predators
+of bacteria and fungi. While the important role of plant inputs (bottom-up regulation)
+in influencing the soil microbiome at various spatial scales has received greater attention
+[8,9], the role of a wide range of soil predators that directly and indirectly affect soil bacterial
+and fungal communities has received relatively less attention in the soil microbiome
+literature [2,10].
